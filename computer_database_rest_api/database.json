@@ -1,0 +1,33 @@
+{
+  "companies": {
+    "co00": {
+      "id": "co00",
+      "name": "Cresus",
+      "location": "global",
+      "computerModels": {
+        "co00cm00": {
+          "id": "co00cm00",
+          "name": "Pear0I",
+          "release": "2032"
+        },
+        "co00cm01": {
+          "id": "co00cm01",
+          "name": "PearII",
+          "release": "2033"
+        }
+      }
+    },
+    "co01": {
+      "id": "co01",
+      "name": "Syrup",
+      "location": "NA",
+      "computerModels": {
+        "co01cm00": {
+          "id": "co01cm00",
+          "name": "MappleKing",
+          "release": "2032"
+        }
+      }
+    }
+  }
+}
