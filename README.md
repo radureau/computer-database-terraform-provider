@@ -42,4 +42,5 @@ Server running at http://127.0.0.1:8080/api/v1
 
 ## Custom terraform provider
 
-<https://developer.hashicorp.com/terraform/plugin/framework/getting-started/code-walkthrough>
+- <https://developer.hashicorp.com/terraform/plugin/framework/getting-started/code-walkthrough>
+- <https://developer.hashicorp.com/terraform/tutorials/providers?utm_source=WEBSITE&utm_medium=WEB_IO&utm_offer=ARTICLE_PAGE&utm_content=DOCS>
