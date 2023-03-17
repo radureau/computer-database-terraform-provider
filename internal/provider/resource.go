@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -9,45 +10,72 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/radureau/terraform-provider-computer-database/internal/cdb"
 )
 
-var _ resource.Resource = (*exampleResource)(nil)
-
-type exampleResource struct {
-	provider exampleProvider
+type companyResource struct {
+	client *cdb.APIClient
 }
 
-func NewResource() resource.Resource {
-	return &exampleResource{}
+func NewCompanyResource() resource.Resource {
+	return &companyResource{}
 }
 
-func (e *exampleResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_resource"
+func (r *companyResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	// Prevent panic if the provider has not been configured.
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*cdb.APIClient)
+
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *cdb.APIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+
+		return
+	}
+
+	r.client = client
 }
 
-func (e *exampleResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *companyResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_company"
+}
+
+func (r *companyResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"configurable_attribute": schema.StringAttribute{
-				Optional: true,
+			"name": schema.StringAttribute{
+				Required: true,
+			},
+			"location": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "default to global",
 			},
 			"id": schema.StringAttribute{
+				Optional: true,
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			// "computerModel": schema.ListNestedBlock{},
 		},
 	}
 }
 
-type exampleResourceData struct {
-	ConfigurableAttribute types.String `tfsdk:"configurable_attribute"`
-	Id                    types.String `tfsdk:"id"`
+type companyResourceData struct {
+	ID       types.String `tfsdk:"id"`
+	Name     types.String `tfsdk:"name"`
+	Location types.String `tfsdk:"location"`
 }
 
-func (e *exampleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data exampleResourceData
+func (r *companyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data companyResourceData
 
 	diags := req.Config.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -55,10 +83,22 @@ func (e *exampleResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if data.Location.IsNull() {
+		data.Location = types.StringValue("global")
+	}
 
 	// Create resource using 3rd party API.
-
-	data.Id = types.StringValue("example-id")
+	err := r.client.CreateCompany(
+		&cdb.Company{
+			ID:       data.ID.ValueString(),
+			Name:     data.Name.ValueString(),
+			Location: data.Location.ValueString(),
+		},
+	)
+	if err != nil {
+		resp.Diagnostics.AddError("Couldn't create company.", fmt.Sprint(err))
+		return
+	}
 
 	tflog.Trace(ctx, "created a resource")
 
@@ -66,8 +106,8 @@ func (e *exampleResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(diags...)
 }
 
-func (e *exampleResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data exampleResourceData
+func (r *companyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data companyResourceData
 
 	diags := req.State.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -77,13 +117,24 @@ func (e *exampleResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	// Read resource using 3rd party API.
+	company, err := r.client.GetCompany(data.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Couldn't read company.", fmt.Sprint(err))
+		return
+	}
+
+	data = companyResourceData{
+		ID:       types.StringValue(company.ID),
+		Name:     types.StringValue(company.Name),
+		Location: types.StringValue(company.Location),
+	}
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)
 }
 
-func (e *exampleResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data exampleResourceData
+func (r *companyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data companyResourceData
 
 	diags := req.Plan.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -98,8 +149,8 @@ func (e *exampleResource) Update(ctx context.Context, req resource.UpdateRequest
 	resp.Diagnostics.Append(diags...)
 }
 
-func (e *exampleResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data exampleResourceData
+func (r *companyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data companyResourceData
 
 	diags := req.State.Get(ctx, &data)
 	resp.Diagnostics.Append(diags...)
@@ -109,4 +160,8 @@ func (e *exampleResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	// Delete resource using 3rd party API.
+	err := r.client.DeleteCompany(data.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Couldn't delete company.", fmt.Sprint(err))
+	}
 }

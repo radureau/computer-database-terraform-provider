@@ -7,17 +7,18 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 
-	"github.com/radureau/computer-database-terraform-provider/internal/provider"
+	"github.com/radureau/terraform-provider-computer-database/internal/provider"
 )
 
 func main() {
+
 	var debug bool
 
 	flag.BoolVar(&debug, "debug", false, "set to true to run the provider with support for debuggers like delve")
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/example_namespace/example",
+		Address: "registry.terraform.io/hashicorp/computer-database",
 		Debug:   debug,
 	}
 

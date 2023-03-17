@@ -42,5 +42,24 @@ Server running at http://127.0.0.1:8080/api/v1
 
 ## Custom terraform provider
 
+### Setup
+
+`go install` will produce the terraform-provider-computer-database binary.
+
+```sh
+cat >~/.terraformrc <<EOF
+provider_installation {
+  dev_overrides {
+    "computer-database" = "`[ -z $(go env GOBIN) ] && echo $(go env GOPATH)/bin || echo $(go env GOBIN)`"
+  }
+}
+EOF
+```
+
+`terraform plan` will suffice without need to call terraform init.
+`terraform apply` will write in a terraform.tfstate local file.
+
+### References
+
 - <https://developer.hashicorp.com/terraform/plugin/framework/getting-started/code-walkthrough>
 - <https://developer.hashicorp.com/terraform/tutorials/providers?utm_source=WEBSITE&utm_medium=WEB_IO&utm_offer=ARTICLE_PAGE&utm_content=DOCS>

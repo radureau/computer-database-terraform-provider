@@ -9,10 +9,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-var _ datasource.DataSource = (*exampleDataSource)(nil)
-
 type exampleDataSource struct {
-	provider exampleProvider
+	provider cdbProvider
 }
 
 func NewDataSource() datasource.DataSource {

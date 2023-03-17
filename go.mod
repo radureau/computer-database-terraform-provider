@@ -1,4 +1,4 @@
-module github.com/radureau/computer-database-terraform-provider
+module github.com/radureau/terraform-provider-computer-database
 
 go 1.20
 

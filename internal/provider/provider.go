@@ -4,38 +4,56 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/radureau/terraform-provider-computer-database/internal/cdb"
 )
 
-var _ provider.Provider = (*exampleProvider)(nil)
-
-type exampleProvider struct{}
+type cdbProvider struct {
+	apiURL    string
+	apiClient *cdb.APIClient
+}
 
 func New() func() provider.Provider {
 	return func() provider.Provider {
-		return &exampleProvider{}
+		return &cdbProvider{}
 	}
 }
 
-func (p *exampleProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+func (p *cdbProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	resp.Diagnostics.Append(
+		req.Config.GetAttribute(ctx, path.Root("api_url"), &p.apiURL)...,
+	)
+	p.apiClient = cdb.NewAPIClient(p.apiURL)
+	resp.ResourceData = p.apiClient
+	resp.DataSourceData = p.apiClient
 }
 
-func (p *exampleProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "example"
+func (p *cdbProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "computer-database"
 }
 
-func (p *exampleProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *cdbProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewDataSource,
 	}
 }
 
-func (p *exampleProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *cdbProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewResource,
+		NewCompanyResource,
 	}
 }
 
-func (p *exampleProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *cdbProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"api_url": schema.StringAttribute{
+				Required:    true,
+				Description: "The url to the computer database api. Ex: http://localhost:8080/api/v1",
+			},
+		},
+	}
 }
