@@ -64,6 +64,22 @@ func (c *computerModelJSON) ComputerModel(companyOpt ...*Company) *ComputerModel
 	}
 }
 
+type upsertCompanyRequest struct {
+	companyJSON
+	ComputerModels []computerModelJSON `json:"computerModels"`
+}
+
+func toUpsertCompanyRequest(company *Company) (req upsertCompanyRequest) {
+	req.companyJSON = *toCompanyJSON(company)
+	if company.ComputerModels == nil {
+		return
+	}
+	for _, cm := range *company.ComputerModels {
+		req.ComputerModels = append(req.ComputerModels, *toComputerModelJSON(&cm))
+	}
+	return
+}
+
 type APIClient struct {
 	client  *http.Client
 	baseURL string
@@ -74,8 +90,9 @@ func NewAPIClient(baseURL string) *APIClient {
 }
 
 func (c *APIClient) CreateCompany(company *Company) error {
-	_company := toCompanyJSON(company)
-	jsonData, err := json.Marshal(_company)
+
+	upsertRequest := toUpsertCompanyRequest(company)
+	jsonData, err := json.Marshal(upsertRequest)
 	if err != nil {
 		return err
 	}
@@ -103,28 +120,28 @@ func (c *APIClient) getCompanyByURI(URI string, load bool) (*Company, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
-	var _company *companyJSON
-	err = json.NewDecoder(resp.Body).Decode(&_company)
+	var jsonableCompany *companyJSON
+	err = json.NewDecoder(resp.Body).Decode(&jsonableCompany)
 	if err != nil {
 		return nil, err
 	}
 	if !load {
-		return _company.Company(nil), nil
+		return jsonableCompany.Company(nil), nil
 	}
 	computerModels := []ComputerModel{}
-	for _, cmURI := range _company.ComputerModelsURIs {
+	for _, cmURI := range jsonableCompany.ComputerModelsURIs {
 		cm, err := c.getComputerModelByURI(cmURI, false)
 		if err != nil {
 			return nil, err
 		}
 		computerModels = append(computerModels, *cm)
 	}
-	return _company.Company(computerModels), nil
+	return jsonableCompany.Company(computerModels), nil
 }
 
 func (c *APIClient) UpdateCompany(company *Company) error {
-	_company := toCompanyJSON(company)
-	jsonData, err := json.Marshal(_company)
+	upsertRequest := toUpsertCompanyRequest(company)
+	jsonData, err := json.Marshal(upsertRequest)
 	if err != nil {
 		return err
 	}
@@ -165,14 +182,47 @@ func (c *APIClient) getComputerModelByURI(URI string, load bool) (*ComputerModel
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
-	var _computerModel *computerModelJSON
-	err = json.NewDecoder(resp.Body).Decode(&_computerModel)
+	var jsonableComputerModel *computerModelJSON
+	err = json.NewDecoder(resp.Body).Decode(&jsonableComputerModel)
 	if err != nil {
 		return nil, err
 	}
 	if !load {
-		return _computerModel.ComputerModel(), nil
+		return jsonableComputerModel.ComputerModel(), nil
 	}
-	company, _ := c.getCompanyByURI(_computerModel.CompanyURI, false)
-	return _computerModel.ComputerModel(company), nil
+	company, _ := c.getCompanyByURI(jsonableComputerModel.CompanyURI, false)
+	return jsonableComputerModel.ComputerModel(company), nil
+}
+
+// Requires computerModel.Company not null and computerModel.Company.ID not empty
+func (c *APIClient) CreateComputerModel(computerModel *ComputerModel) error {
+	jsonableComputerModel := toComputerModelJSON(computerModel)
+	jsonData, err := json.Marshal(jsonableComputerModel)
+	if err != nil {
+		return err
+	}
+	resp, err := c.client.Post(
+		fmt.Sprintf("%s/companies/%s/computer-models", c.baseURL, computerModel.Company.ID),
+		"application/json", bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (c *APIClient) DeleteComputerModel(companyID, computerModelID string) error {
+	req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/companies/%s/computer-models/%s", c.baseURL, companyID, computerModelID), nil)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+	return nil
 }

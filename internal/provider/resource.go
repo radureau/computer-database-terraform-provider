@@ -3,7 +3,11 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -63,37 +67,90 @@ func (r *companyResource) Schema(ctx context.Context, req resource.SchemaRequest
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			// "computerModel": schema.ListNestedBlock{},
+		},
+		Blocks: map[string]schema.Block{
+			"computer_model": schema.SetNestedBlock{
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Required: true,
+						},
+						"release": schema.StringAttribute{
+							Optional: true,
+						},
+						"id": schema.StringAttribute{
+							Optional: true,
+							Computed: true,
+						},
+					},
+				},
+			},
 		},
 	}
 }
 
 type companyResourceData struct {
-	ID       types.String `tfsdk:"id"`
-	Name     types.String `tfsdk:"name"`
-	Location types.String `tfsdk:"location"`
+	ID            types.String `tfsdk:"id"`
+	Name          types.String `tfsdk:"name"`
+	Location      types.String `tfsdk:"location"`
+	ComputerModel types.Set    `tfsdk:"computer_model"`
+}
+type computerModelResourceData struct {
+	ID      types.String `tfsdk:"id"`
+	Name    types.String `tfsdk:"name"`
+	Release types.String `tfsdk:"release"`
+}
+
+func (tfCompanyComputerModel computerModelResourceData) ComputerModel() *cdb.ComputerModel {
+	return &cdb.ComputerModel{
+		ID:      tfCompanyComputerModel.ID.ValueString(),
+		Name:    tfCompanyComputerModel.Name.ValueString(),
+		Release: tfCompanyComputerModel.Release.ValueString(),
+	}
+}
+func (tfCompany *companyResourceData) setDefaults() {
+	if tfCompany.Location.IsNull() || tfCompany.Location.IsUnknown() {
+		tfCompany.Location = types.StringValue("global")
+	}
+}
+func (tfCompany *companyResourceData) Company(ctx context.Context) (company *cdb.Company, diags diag.Diagnostics) {
+	tfCompany.setDefaults()
+
+	tfCompanyComputerModels := []computerModelResourceData{}
+	diags = tfCompany.ComputerModel.ElementsAs(ctx, &tfCompanyComputerModels, false)
+	if diags.HasError() {
+		return
+	}
+	computerModels := make([]cdb.ComputerModel, len(tfCompanyComputerModels))
+	for idx, model := range tfCompanyComputerModels {
+		computerModels[idx] = *model.ComputerModel()
+	}
+	company = &cdb.Company{
+		ID:             tfCompany.ID.ValueString(),
+		Name:           tfCompany.Name.ValueString(),
+		Location:       tfCompany.Location.ValueString(),
+		ComputerModels: &computerModels,
+	}
+	return
 }
 
 func (r *companyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data companyResourceData
+	var tfCompany companyResourceData
 
-	diags := req.Config.Get(ctx, &data)
+	diags := req.Config.Get(ctx, &tfCompany)
 	resp.Diagnostics.Append(diags...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if data.Location.IsNull() {
-		data.Location = types.StringValue("global")
+
+	company, diags := tfCompany.Company(ctx)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	// Create resource using 3rd party API.
 	err := r.client.CreateCompany(
-		&cdb.Company{
-			ID:       data.ID.ValueString(),
-			Name:     data.Name.ValueString(),
-			Location: data.Location.ValueString(),
-		},
+		company,
 	)
 	if err != nil {
 		resp.Diagnostics.AddError("Couldn't create company.", fmt.Sprint(err))
@@ -102,50 +159,100 @@ func (r *companyResource) Create(ctx context.Context, req resource.CreateRequest
 
 	tflog.Trace(ctx, "created a resource")
 
-	diags = resp.State.Set(ctx, &data)
+	diags = resp.State.Set(ctx, &tfCompany)
 	resp.Diagnostics.Append(diags...)
 }
 
 func (r *companyResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data companyResourceData
-
-	diags := req.State.Get(ctx, &data)
+	var stateTFCompanyID string
+	diags := req.State.GetAttribute(ctx, path.Root("id"), &stateTFCompanyID)
 	resp.Diagnostics.Append(diags...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Read resource using 3rd party API.
-	company, err := r.client.GetCompany(data.ID.ValueString())
+	company, err := r.client.GetCompany(stateTFCompanyID)
 	if err != nil {
-		resp.Diagnostics.AddError("Couldn't read company.", fmt.Sprint(err))
+		if strings.Contains(err.Error(), "404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError("couldn't update company", err.Error())
 		return
 	}
 
-	data = companyResourceData{
+	tfCompany := companyResourceData{
 		ID:       types.StringValue(company.ID),
 		Name:     types.StringValue(company.Name),
 		Location: types.StringValue(company.Location),
 	}
 
-	diags = resp.State.Set(ctx, &data)
+	stateTFCompanyComputerModels := []computerModelResourceData{}
+	diags = req.State.GetAttribute(ctx, path.Root("computer_model"), &stateTFCompanyComputerModels)
 	resp.Diagnostics.Append(diags...)
-}
-
-func (r *companyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data companyResourceData
-
-	diags := req.Plan.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
-
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Update resource using 3rd party API.
+	otype := types.ObjectType{
+		AttrTypes: map[string]attr.Type{
+			"id":      types.StringType,
+			"name":    types.StringType,
+			"release": types.StringType,
+		},
+	}
+	computerModelsAsObjects := []types.Object{}
+	for _, model := range stateTFCompanyComputerModels {
+		computerModel, err := r.client.GetComputerModel(company.ID, model.ID.ValueString())
+		if err != nil {
+			continue
+		}
+		obj, diags := types.ObjectValueFrom(ctx, otype.AttrTypes, computerModelResourceData{
+			ID:      types.StringValue(computerModel.ID),
+			Name:    types.StringValue(computerModel.Name),
+			Release: types.StringValue(computerModel.Release),
+		})
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		computerModelsAsObjects = append(computerModelsAsObjects, obj)
+	}
+	tfCompany.ComputerModel, diags = types.SetValueFrom(ctx, otype, computerModelsAsObjects)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	diags = resp.State.Set(ctx, &data)
+	diags = resp.State.Set(ctx, &tfCompany)
+	resp.Diagnostics.Append(diags...)
+}
+
+func (r *companyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var tfCompany companyResourceData
+
+	diags := req.Plan.Get(ctx, &tfCompany)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	company, diags := tfCompany.Company(ctx)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := r.client.UpdateCompany(
+		company,
+	)
+	if err != nil {
+		resp.Diagnostics.AddError("Couldn't update company.", fmt.Sprint(err))
+		return
+	}
+
+	diags = resp.State.Set(ctx, &tfCompany)
 	resp.Diagnostics.Append(diags...)
 }
 

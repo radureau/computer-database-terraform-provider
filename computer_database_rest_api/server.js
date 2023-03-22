@@ -50,7 +50,7 @@ const fs = require('fs');
 
   const addCompany = (company) => {
     if (company.id in database.companies) return 'company.id not available';
-    company.computerModels = company.computerModels.reduce( (db, cm) => { db[cm.id] = cm; return models }, {})
+    company.computerModels = company.computerModels.reduce( (db, cm) => { db[cm.id] = cm; return db }, {})
     database.companies[company.id] = company
   }
   const removeCompanyById = (companyId) => {
@@ -68,6 +68,15 @@ const fs = require('fs');
 
     addCompany,
     removeCompanyById,
+  }
+  store.updateCompany = (company) => {
+    store.removeCompanyById(company.id)
+    return store.addCompany(company)
+  }
+  store.addCompanyComputerModel = (companyId, computerModel) => {
+    let company = store.getCompany(companyId)
+    company.computerModels.push(computerModel)
+    return store.updateCompany(company)
   }
 }
 
@@ -107,26 +116,35 @@ const fs = require('fs');
     company.json = () => JSON.stringify({ ...company, uri: company.uri(), computerModels: company.computerModels.map(cm => api.computerModelURI(company.id, cm.id)) });
     return company
   }
-  const JSONCompanyModel = (computerModel) => {
+  const JSONComputerModel = (computerModel) => {
     computerModel = {...computerModel}
     computerModel.uri = () => api.computerModelURI(computerModel.company.id, computerModel.id);
     computerModel.json = () => JSON.stringify({ ...computerModel, uri: computerModel.uri(), company: api.companyURI(computerModel.company.id) });
     return computerModel;
   }
 
-  const fromJSONCompany = ({id,name,location}) => {
+  const fromJSONComputerModel = ({id,name,release}) => {
+    const jsonComputerModel = {id,name,release}
+    if (Object.values(jsonComputerModel).some(v => !v)) return undefined;
+    return jsonComputerModel;
+  }
+  const fromJSONCompany = ({id,name,location, computerModels}) => {
     const jsonCompany = {id,name,location}
     if (Object.values(jsonCompany).some(v => !v)) return undefined;
-    jsonCompany.computerModels = [];
+    jsonCompany.computerModels =  computerModels ?
+      computerModels.map(fromJSONComputerModel).filter(Boolean)
+      : []
+    ;
     return jsonCompany;
   }
 
   var json = {
     company: JSONcompany,
-    companyModel: JSONCompanyModel,
+    JSONComputerModel: JSONComputerModel,
   }
   var jsonParse = {
     company: fromJSONCompany,
+    computerModel: fromJSONComputerModel,
   }
 }
 
@@ -152,7 +170,13 @@ const fs = require('fs');
         res.end(json.company(company).json());
       },
       'PUT': (req, res, { companyId }) => {
-        res.writeHead(501, 'not implemented').end('not implemented');
+        const company = store.getCompany(companyId)
+        if (!company) { res.writeHead(404, `company ${companyId} not found`).end(); return }
+        const updatedCompany = jsonParse.company(req.body)
+        if (!updatedCompany || updatedCompany.id !== company.id) { res.writeHead(400).end(); return }
+        let err = store.updateCompany(updatedCompany);
+        if (err) { res.writeHead(412, err).end(err); return }
+        res.writeHead(200).end();
       },
       'DELETE': (req, res, { companyId }) => {
         const company = store.removeCompanyById(companyId);
@@ -164,14 +188,23 @@ const fs = require('fs');
       'GET': (req, res, { companyId }) => {
         const computerModels = store.listCompanyComputerModels(companyId)
         if (!computerModels) { res.writeHead(404, `computer models from company ${companyId} not found`).end(); return }
-        res.end(computerModels.map(json.companyModel).json());
+        res.end(computerModels.map(json.JSONComputerModel).json());
+      },
+      'POST': (req, res, { companyId }) => {
+        const computerModel = jsonParse.computerModel(req.body);
+        if (!computerModel) { res.writeHead(400).end(); return }
+        
+        let err = store.addCompanyComputerModel(companyId, computerModel);
+
+        if (err) { res.writeHead(412, err).end(err); return }
+        res.writeHead(201).end();
       },
     },
     'companies/:companyId/computer-models/:computerModelId': {
       'GET': (req, res, { companyId, computerModelId }) => {
         const computerModel = store.getCompanyComputerModel(companyId, computerModelId);
         if (!computerModel) { res.writeHead(404, `computer model ${computerModelId} not found in company ${companyId}`).end(); return }
-        res.end(json.companyModel(computerModel).json());
+        res.end(json.JSONComputerModel(computerModel).json());
       },
     },
   }
@@ -211,7 +244,12 @@ const fs = require('fs');
         data += chunk;
       })
       req.on('end', () => {
-        req.body = data ? JSON.parse(data) : {}
+        try {
+          req.body = data ? JSON.parse(data) : {}
+        } catch(e) {
+          res.writeHead(400, e.message).end()
+          return
+        }
         handler(req, res, req.params);
       })
     } else {
