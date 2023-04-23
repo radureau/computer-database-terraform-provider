@@ -61,39 +61,30 @@ func (r *companyResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Description: "default to global",
 			},
 			"id": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-		},
-		Blocks: map[string]schema.Block{
-			"computer_model": schema.SetNestedBlock{
-				NestedObject: schema.NestedBlockObject{
-					Attributes: map[string]schema.Attribute{
-						"name": schema.StringAttribute{
-							Required: true,
-						},
-						"release": schema.StringAttribute{
-							Optional: true,
-						},
-						"id": schema.StringAttribute{
-							Optional: true,
-							Computed: true,
-						},
+			"computer_models": schema.SetAttribute{
+				ElementType: types.ObjectType{
+					AttrTypes: map[string]attr.Type{
+						"name":    types.StringType,
+						"release": types.StringType,
+						"id":      types.StringType,
 					},
 				},
+				Optional: true,
 			},
 		},
 	}
 }
 
 type companyResourceData struct {
-	ID            types.String `tfsdk:"id"`
-	Name          types.String `tfsdk:"name"`
-	Location      types.String `tfsdk:"location"`
-	ComputerModel types.Set    `tfsdk:"computer_model"`
+	ID             types.String `tfsdk:"id"`
+	Name           types.String `tfsdk:"name"`
+	Location       types.String `tfsdk:"location"`
+	ComputerModels types.Set    `tfsdk:"computer_models"`
 }
 type computerModelResourceData struct {
 	ID      types.String `tfsdk:"id"`
@@ -117,7 +108,7 @@ func (tfCompany *companyResourceData) Company(ctx context.Context) (company *cdb
 	tfCompany.setDefaults()
 
 	tfCompanyComputerModels := []computerModelResourceData{}
-	diags = tfCompany.ComputerModel.ElementsAs(ctx, &tfCompanyComputerModels, false)
+	diags = tfCompany.ComputerModels.ElementsAs(ctx, &tfCompanyComputerModels, false)
 	if diags.HasError() {
 		return
 	}
@@ -189,7 +180,7 @@ func (r *companyResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	stateTFCompanyComputerModels := []computerModelResourceData{}
-	diags = req.State.GetAttribute(ctx, path.Root("computer_model"), &stateTFCompanyComputerModels)
+	diags = req.State.GetAttribute(ctx, path.Root("computer_models"), &stateTFCompanyComputerModels)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -219,7 +210,7 @@ func (r *companyResource) Read(ctx context.Context, req resource.ReadRequest, re
 		}
 		computerModelsAsObjects = append(computerModelsAsObjects, obj)
 	}
-	tfCompany.ComputerModel, diags = types.SetValueFrom(ctx, otype, computerModelsAsObjects)
+	tfCompany.ComputerModels, diags = types.SetValueFrom(ctx, otype, computerModelsAsObjects)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return

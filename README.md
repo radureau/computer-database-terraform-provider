@@ -44,7 +44,8 @@ Server running at http://127.0.0.1:8080/api/v1
 
 ### Setup
 
-`go install` will produce the terraform-provider-computer-database binary.
+`go install` will produce the terraform-provider-computer-database binary.  
+`go build -o ~/go/bin/terraform-provider-computer-database` is an alternative.
 
 ```sh
 cat >~/.terraformrc <<EOF

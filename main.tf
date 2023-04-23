@@ -21,20 +21,13 @@ locals {
 
 resource "computer-database_company" "my_company" {
   id = "cotf"
-  name = "My Terraformed Company 2"
+  name = "My Terraformed Company"
 
-  computer_model {
-    id = "cotfcmtf"
-    name = "My Terraformed Computer Model"
-    release = 2023
-  }
-
-  dynamic "computer_model" {
-    for_each = toset(local.computer_models)
-    content {
-      id = format("cotf%s", lower(computer_model.value))
-      name = computer_model.value
+  computer_models = toset([ for model_name in local.computer_models:
+    {
+      id = format("cotf%s", lower(model_name))
+      name = model_name
       release = 2023
     }
-  }
+  ])
 }
