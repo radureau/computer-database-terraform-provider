@@ -227,6 +227,7 @@ const fs = require('fs');
   const server = http.createServer((req, res) => {
   
     let path = req.url.replace(api.prefix, '');
+    res.setHeader('Access-Control-Allow-Origin','*')
   
     const routeRegex = Object.entries(_routesRegex).find(([_, re]) => re.test(path));
     if (!routeRegex) { res.writeHead(404, 'route not found').end(); return }
