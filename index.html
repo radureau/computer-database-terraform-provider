@@ -127,8 +127,8 @@
             </div>
         </form>
         <div v-else @mouseover="modeEdition=true">
-            <h5>{{ store.computerModels[uri].name }}</h5>
-            <h6 class="text-muted">id: {{ store.computerModels[uri].id }}</h6>
+            <h5>🖥️ {{ store.computerModels[uri].name }}</h5>
+            <h6 class="text-muted">🆔 {{ store.computerModels[uri].id }}</h6>
             <span class="badge bg-primary">{{ store.computerModels[uri].release }}</span>
         </div>
     </template>
@@ -141,13 +141,13 @@
             <input @click.prevent="onSubmit({name,id,location})" class="btn btn-secondary btn-sm" type="submit" value="Submit">
             <input @click.prevent="name=company.name;id=company.id;location=company.location" class="btn btn-light" type="reset" value="Reset">
             <hr>
-            <span>Computer Models:</span>
+            <em>Computer Models:</em>
         </form>
         <div v-else class="card-body">
-            <h5 class="card-title" @mouseover="modeEdition=true">Company: {{ name }}</h5>
-            <h6 class="card-subtitle mb-2 text-muted" @mouseover="modeEdition=true">id: {{ id }}</h6>
-            <p class="card-text">location: <span class="badge bg-secondary" @mouseover="modeEdition=true">{{ location }}</span></p>
-            <span>Computer Models:</span>
+            <h5 class="card-title" @mouseover="modeEdition=true">🏢 {{ name }}</h5>
+            <h6 class="card-subtitle mb-2 text-muted" @mouseover="modeEdition=true">🆔 {{ id }}</h6>
+            <p class="card-text">📍 <span class="badge bg-secondary" @mouseover="modeEdition=true">{{ location }}</span></p>
+            <em>Computer Models:</em>
         </div>
         <ul class="list-group list-group-flush m-5">
             <li class="list-group-item" v-scope="ComputerModel({uri})" v-for="uri in computerModels" :key="uri"></li>
@@ -155,7 +155,7 @@
     </template>
 
     <template id="companies-template">
-        <div :class="[ store._loading ? 'spinner-border' : '' ]" style="top:1em; left:1em;position: absolute;">
+        <div :class="[ store._loading ? 'spinner-border' : '' ]" style="top:0.5em; right:0.5em; position:absolute;">
             <button class="btn btn-outline-secondary" @click="store.fetchCompanies" type="submit">🔃</button>
         </div>
         <div class="card-group">
