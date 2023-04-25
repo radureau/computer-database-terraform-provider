@@ -59,6 +59,14 @@ const fs = require('fs');
     delete database.companies[companyId];
     return company;
   }
+  const removeCompanyComputerModelById = (companyId, computerModelId) => {
+    if (!(companyId in database.companies)) return undefined
+    const company = database.companies[companyId];
+    if (!(computerModelId in company)) return undefined
+    const computerModel = company[computerModelId];
+    delete company[computerModelId];
+    return computerModel;
+  }
   
   var store = {
     listCompanies,
@@ -68,10 +76,20 @@ const fs = require('fs');
 
     addCompany,
     removeCompanyById,
+    removeCompanyComputerModelById,
   }
   store.updateCompany = (company) => {
     store.removeCompanyById(company.id)
     return store.addCompany(company)
+  }
+  store.updateCompanyComputerModel = (companyId, computerModel) => {
+    const company = store.getCompany(companyId)
+    company.computerModels.splice(
+      company.computerModels.findIndex(({id}) => id === computerModel.id),
+      1,
+      computerModel
+    )
+    return store.updateCompany(company)
   }
   store.addCompanyComputerModel = (companyId, computerModel) => {
     let company = store.getCompany(companyId)
@@ -206,6 +224,15 @@ const fs = require('fs');
         if (!computerModel) { res.writeHead(404, `computer model ${computerModelId} not found in company ${companyId}`).end(); return }
         res.end(json.JSONComputerModel(computerModel).json());
       },
+      'PUT': (req, res, { companyId, computerModelId }) => {
+        const computerModel = store.getCompanyComputerModel(companyId, computerModelId)
+        if (!computerModel) { res.writeHead(404, `computer model ${computerModelId} not found in company ${companyId}`).end(); return }
+        const updatedComputerModel = jsonParse.computerModel(req.body)
+        if (!updatedComputerModel || updatedComputerModel.id !== computerModel.id) { res.writeHead(400).end(); return }
+        let err = store.updateCompanyComputerModel(companyId, updatedComputerModel)
+        if (err) { res.writeHead(412, err).end(err); return }
+        res.writeHead(200).end();
+      },
     },
   }
   var routes = REST;
@@ -228,6 +255,9 @@ const fs = require('fs');
   
     let path = req.url.replace(api.prefix, '');
     res.setHeader('Access-Control-Allow-Origin','*')
+    res.setHeader('Access-Control-Allow-Methods','PUT, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers','*')
+    if (req.method === 'OPTIONS') { res.writeHead(200).end(); return }
   
     const routeRegex = Object.entries(_routesRegex).find(([_, re]) => re.test(path));
     if (!routeRegex) { res.writeHead(404, 'route not found').end(); return }
