@@ -15,4 +15,3 @@ resource "computer-database_company" "oxyl" {
     }
   ]
 }
-

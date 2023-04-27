@@ -1,4 +1,4 @@
-module "computer_database" {
+module "oxyl_mirror" {
   source = "./modules/cdb_company"
   
   name = strrev(computer-database_company.oxyl.name)
@@ -10,4 +10,8 @@ module "computer_database" {
         release = 2023
     }
   ]
+}
+
+output "mirror" {
+    value = module.oxyl_mirror
 }
